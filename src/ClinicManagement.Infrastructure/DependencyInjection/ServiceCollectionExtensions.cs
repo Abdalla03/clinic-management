@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<ClinicDbContext>(options => provider.Configure(options, connectionString));
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<DemoAccountSeeder>();
+        services.AddScoped<DemoDataSeeder>();
         return services;
     }
 

@@ -25,6 +25,7 @@ TestResults/
 
 docker/data/
 docker/backups/
+backups/
 .env
 .env.local
 node_modules/

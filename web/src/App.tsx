@@ -5,6 +5,7 @@ import { ProtectedRoute, RoleGuard } from "./components/guards";
 import { AuthSessionListener } from "./features/auth/AuthSessionListener";
 import { AuthProvider } from "./features/auth/AuthProvider";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
+import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { ToastProvider } from "./lib/toast/ToastProvider";
 import { ClinicalStaffRoles, RoleDoctor, RolePatient, RoleSecretary } from "./lib/roles";
 import { AppointmentBookingPage } from "./pages/appointments/AppointmentBookingPage";
@@ -127,7 +128,7 @@ const router = createBrowserRouter([
           {
             path: "appointments/new",
             element: (
-              <RoleGuard roles={ClinicalStaffRoles}>
+              <RoleGuard roles={[RoleDoctor, RoleSecretary, RolePatient]}>
                 <AppointmentBookingPage />
               </RoleGuard>
             ),
@@ -143,7 +144,7 @@ const router = createBrowserRouter([
           {
             path: "appointments/:appointmentId",
             element: (
-              <RoleGuard roles={ClinicalStaffRoles}>
+              <RoleGuard roles={[RoleDoctor, RoleSecretary, RolePatient]}>
                 <AppointmentDetailPage />
               </RoleGuard>
             ),
@@ -287,13 +288,15 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <RouterProvider router={router} />
-          </AuthProvider>
-        </ToastProvider>
-      </I18nProvider>
+      <ThemeProvider>
+        <I18nProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <RouterProvider router={router} />
+            </AuthProvider>
+          </ToastProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -11,6 +11,7 @@ using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +47,17 @@ builder.Services.AddClinicRateLimiter(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+
+// In production the API sits behind a TLS-terminating reverse proxy (Caddy). Trust the
+// X-Forwarded-* headers it injects so Request.IsHttps is true and Hsts/UseHttpsRedirection
+// do not loop. The proxy is the only reachable peer on the internal compose network, so
+// trusting all forwarders here is safe; the API port is never published in prod.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
@@ -150,6 +162,8 @@ if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Te
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseSerilogRequestLogging(options =>
 {
     options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -187,10 +201,32 @@ app.MapGet("/", () => Results.Ok(new { service = "clinic-management-api", status
     .AllowAnonymous()
     .ExcludeFromDescription();
 
-if (args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
+var seedDemoAccounts = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
+var seedDemoData = app.Environment.IsDevelopment();
+
+// Development and Testing always bring the database up to date on boot so a fresh clone can sign in
+// immediately without remembering to pass --migrate. Other environments only migrate when the
+// operator explicitly asks for it, so a production process never performs a surprise schema change.
+var runDatabaseInitializer =
+    args.Contains("--migrate", StringComparer.OrdinalIgnoreCase) ||
+    app.Environment.IsDevelopment() ||
+    app.Environment.IsEnvironment("Testing");
+
+if (runDatabaseInitializer)
 {
-    var seedDemoAccounts = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
-    await DatabaseInitializer.InitializeAsync(app.Services, seedDemoAccounts);
+    try
+    {
+        await DatabaseInitializer.InitializeAsync(app.Services, seedDemoAccounts, seedDemoData);
+    }
+    catch (Exception exception)
+    {
+        var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        startupLogger.LogError(
+            exception,
+            "Database initialization failed while applying migrations/seeding. In Development this " +
+            "usually means PostgreSQL is not reachable or the connection string is wrong; the API " +
+            "will still start but sign-in and data endpoints will fail until it is fixed.");
+    }
 }
 
 await app.RunAsync();

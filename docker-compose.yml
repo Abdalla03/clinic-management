@@ -43,6 +43,12 @@ services:
     ports:
       - "8080:8080"
     command: ["--migrate"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     build:
@@ -53,11 +59,17 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     environment:
       WEB_API_URL: ${WEB_API_URL:-http://localhost:8080}
     ports:
       - "${WEB_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   clinic-postgres-data:

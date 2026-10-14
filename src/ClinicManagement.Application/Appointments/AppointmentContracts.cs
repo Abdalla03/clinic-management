@@ -43,6 +43,16 @@ public sealed record BookAppointmentRequest(
     int DurationMinutes = 30,
     string? ReasonForVisit = null);
 
+/// <summary>
+/// Self-service booking for a signed-in patient. The patient record is resolved from the account,
+/// so the caller never supplies (or can spoof) a patient id.
+/// </summary>
+public sealed record BookMyAppointmentRequest(
+    Guid DoctorId,
+    DateTime StartsAtUtc,
+    int DurationMinutes = 30,
+    string? ReasonForVisit = null);
+
 public sealed record RescheduleAppointmentRequest(
     DateTime StartsAtUtc,
     int DurationMinutes = 30);
@@ -68,7 +78,11 @@ public sealed record AppointmentSearchQuery
 
 public sealed record AvailabilitySlot(DateTime StartsAtUtc, DateTime EndsAtUtc);
 
-public sealed record DoctorSummary(Guid Id, string Name, bool IsAcceptingAppointments);
+public sealed record DoctorSummary(
+    Guid Id,
+    string Name,
+    string Specialty,
+    bool IsAcceptingAppointments);
 
 public sealed record DoctorScheduleResponse(
     Guid Id,

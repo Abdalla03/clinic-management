@@ -18,4 +18,11 @@ public static class DemoAccounts
     public const string DoctorSpecialty = "Cardiology";
     public const string DoctorLicenseNumber = "LIC-DEMO-0001";
     public const string PatientMedicalRecordNumber = "MRN-DEMO-0001";
+
+    // Built-in development-only fallbacks. They are only ever used when the corresponding
+    // Seed:*Password setting is missing, so a development checkout signs in out of the box while a
+    // deployment can still override (or, by setting the value to an empty string, disable) them.
+    public const string DoctorDefaultPassword = "Doctor!Clinic2026";
+    public const string SecretaryDefaultPassword = "Secretary!Clinic2026";
+    public const string PatientDefaultPassword = "Patient!Clinic2026";
 }

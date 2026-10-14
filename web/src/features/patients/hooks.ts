@@ -15,11 +15,12 @@ import {
   type UpdatePatientRequest,
 } from "../../lib/api/patients";
 
-export function usePatientsSearch(params: PatientSearchParams) {
+export function usePatientsSearch(params: PatientSearchParams, enabled = true) {
   return useQuery({
     queryKey: ["patients", "search", params],
     queryFn: () => searchPatients(params),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

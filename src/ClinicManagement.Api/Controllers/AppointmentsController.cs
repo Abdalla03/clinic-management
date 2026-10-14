@@ -56,7 +56,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     }
 
     [HttpGet("{appointmentId:guid}")]
-    [Authorize(Policy = Policies.ClinicalStaff)]
+    [Authorize(Policy = Policies.AuthenticatedUser)]
     [ProducesResponseType(typeof(AppointmentDetails), StatusCodes.Status200OK)]
     public async Task<IResult> GetAsync(Guid appointmentId, CancellationToken cancellationToken)
     {
@@ -76,6 +76,36 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
         return result.Succeeded
             ? Results.Created($"/api/appointments/{result.Value!.Id}", result.Value)
             : result.ToHttpResult();
+    }
+
+    [HttpPost("me")]
+    [Authorize(Policy = Policies.PatientOnly)]
+    [ProducesResponseType(typeof(AppointmentDetails), StatusCodes.Status201Created)]
+    public async Task<IResult> BookMyAsync(
+        [FromBody] BookMyAppointmentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await appointmentService.BookMyAppointmentAsync(request, cancellationToken);
+
+        return result.Succeeded
+            ? Results.Created($"/api/appointments/{result.Value!.Id}", result.Value)
+            : result.ToHttpResult();
+    }
+
+    [HttpPost("me/{appointmentId:guid}/cancel")]
+    [Authorize(Policy = Policies.PatientOnly)]
+    [ProducesResponseType(typeof(AppointmentDetails), StatusCodes.Status200OK)]
+    public async Task<IResult> CancelMyAsync(
+        Guid appointmentId,
+        [FromBody] CancelAppointmentRequest? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await appointmentService.CancelOwnAppointmentAsync(
+            appointmentId,
+            request ?? new CancelAppointmentRequest(),
+            cancellationToken);
+
+        return result.ToHttpResult();
     }
 
     [HttpPut("{appointmentId:guid}")]

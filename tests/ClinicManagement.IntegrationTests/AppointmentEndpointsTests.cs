@@ -223,6 +223,7 @@ public sealed class AppointmentEndpointsTests : IDisposable
             "/api/appointments",
             new BookAppointmentRequest(otherPatientId, _doctorId, SlotAt(30), 30));
         Assert.Equal(HttpStatusCode.Created, book.StatusCode);
+        var otherAppointment = await book.Content.ReadFromJsonAsync<AppointmentDetails>();
 
         var own = await patientClient.GetAsync("/api/appointments/me");
         Assert.Equal(HttpStatusCode.OK, own.StatusCode);
@@ -235,8 +236,11 @@ public sealed class AppointmentEndpointsTests : IDisposable
         var search = await patientClient.GetAsync("/api/appointments");
         Assert.Equal(HttpStatusCode.Forbidden, search.StatusCode);
 
-        var detail = await patientClient.GetAsync($"/api/appointments/{Guid.NewGuid()}");
-        Assert.Equal(HttpStatusCode.Forbidden, detail.StatusCode);
+        var otherDetail = await patientClient.GetAsync($"/api/appointments/{otherAppointment!.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, otherDetail.StatusCode);
+
+        var missingDetail = await patientClient.GetAsync($"/api/appointments/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, missingDetail.StatusCode);
     }
 
     [RequiresDockerFact]

@@ -15,6 +15,11 @@ public interface IAppointmentService
         BookAppointmentRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Books an appointment for the signed-in patient's own record.</summary>
+    Task<Result<AppointmentDetails>> BookMyAppointmentAsync(
+        BookMyAppointmentRequest request,
+        CancellationToken cancellationToken);
+
     Task<Result<AppointmentDetails>> RescheduleAppointmentAsync(
         Guid appointmentId,
         RescheduleAppointmentRequest request,
@@ -27,6 +32,12 @@ public interface IAppointmentService
     Task<Result> MarkNoShowAsync(Guid appointmentId, CancellationToken cancellationToken);
 
     Task<Result> CancelAppointmentAsync(
+        Guid appointmentId,
+        CancelAppointmentRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Cancels one of the signed-in patient's own appointments.</summary>
+    Task<Result> CancelOwnAppointmentAsync(
         Guid appointmentId,
         CancelAppointmentRequest request,
         CancellationToken cancellationToken);

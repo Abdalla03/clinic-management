@@ -11,11 +11,13 @@ import { IconCalendar } from "../../components/icons";
 import {
   useAppointment,
   useCancelAppointment,
+  useCancelMyAppointment,
   useCompleteAppointment,
   useConfirmAppointment,
   useMarkNoShow,
   useRescheduleAppointment,
 } from "../../features/appointments/hooks";
+import { useAuth } from "../../features/auth/useAuth";
 import { useAvailability } from "../../features/doctors/hooks";
 import { useApiErrorMessage } from "../../features/errors/useApiErrorMessage";
 import {
@@ -39,6 +41,7 @@ export function AppointmentDetailPage() {
   const { t, locale } = useI18n();
   const toast = useToast();
   const apiMessage = useApiErrorMessage();
+  const { isPatient } = useAuth();
 
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -66,6 +69,7 @@ export function AppointmentDetailPage() {
   const noShowMutation = useMarkNoShow();
   const rescheduleMutation = useRescheduleAppointment();
   const cancelMutation = useCancelAppointment();
+  const myCancelMutation = useCancelMyAppointment();
 
   const runMutation = (mutation: ReturnType<typeof useConfirmAppointment>, successKey: TranslationKey) => {
     if (!appointmentId) {
@@ -116,20 +120,22 @@ export function AppointmentDetailPage() {
     if (!appointmentId) {
       return;
     }
-    cancelMutation.mutate(
-      { id: appointmentId, body: { reason: cancelReason.trim() || undefined } },
-      {
-        onSuccess: () => {
-          toast.success({ title: t("appointment.cancelSuccess") });
-          setRescheduleOpen(false);
-          setCancelOpen(false);
-        },
-        onError: (error) => {
-          const message = apiMessage(error);
-          toast.error({ title: message.title, message: message.message });
-        },
-      },
-    );
+    const body = { reason: cancelReason.trim() || undefined };
+    const onSuccess = () => {
+      toast.success({ title: t("appointment.cancelSuccess") });
+      setRescheduleOpen(false);
+      setCancelOpen(false);
+    };
+    const onError = (error: unknown) => {
+      const message = apiMessage(error);
+      toast.error({ title: message.title, message: message.message });
+    };
+
+    if (isPatient) {
+      myCancelMutation.mutate({ id: appointmentId, body }, { onSuccess, onError });
+      return;
+    }
+    cancelMutation.mutate({ id: appointmentId, body }, { onSuccess, onError });
   };
 
   const status = appointment?.status;
@@ -140,7 +146,7 @@ export function AppointmentDetailPage() {
       <PageHeader
         title={t("appointment.details")}
         actions={
-          <Link to="/appointments">
+          <Link to={isPatient ? "/appointments/me" : "/appointments"}>
             <Button variant="secondary">{t("common.back")}</Button>
           </Link>
         }
@@ -234,32 +240,36 @@ export function AppointmentDetailPage() {
               <CardHeader title={t("appointment.title")} />
               <CardBody className="flex flex-col gap-4">
                 <div className="flex flex-wrap gap-2">
-                  {status === StatusBooked ? (
+                  {!isPatient && status === StatusBooked ? (
                     <Button loading={confirmMutation.isPending} onClick={() => runMutation(confirmMutation, "appointment.confirmSuccess")}>
                       {t("appointment.confirm")}
                     </Button>
                   ) : null}
-                  {status === StatusConfirmed ? (
+                  {!isPatient && status === StatusConfirmed ? (
                     <Button loading={completeMutation.isPending} onClick={() => runMutation(completeMutation, "appointment.completeSuccess")}>
                       {t("appointment.complete")}
                     </Button>
                   ) : null}
-                  <Button
-                    variant="secondary"
-                    loading={noShowMutation.isPending}
-                    onClick={() => runMutation(noShowMutation, "appointment.noShowSuccess")}
-                  >
-                    {t("appointment.noShow")}
-                  </Button>
-                  <Button variant="secondary" onClick={() => setRescheduleOpen((open) => !open)}>
-                    {t("appointment.reschedule")}
-                  </Button>
+                  {!isPatient ? (
+                    <Button
+                      variant="secondary"
+                      loading={noShowMutation.isPending}
+                      onClick={() => runMutation(noShowMutation, "appointment.noShowSuccess")}
+                    >
+                      {t("appointment.noShow")}
+                    </Button>
+                  ) : null}
+                  {!isPatient ? (
+                    <Button variant="secondary" onClick={() => setRescheduleOpen((open) => !open)}>
+                      {t("appointment.reschedule")}
+                    </Button>
+                  ) : null}
                   <Button variant="danger" onClick={() => setCancelOpen((open) => !open)}>
                     {t("appointment.cancel")}
                   </Button>
                 </div>
 
-                {rescheduleOpen ? (
+                {!isPatient && rescheduleOpen ? (
                   <div className="rounded-xl border border-slate-200 p-4">
                     <p className="mb-3 text-sm font-medium text-slate-700">{t("appointment.rescheduleHint")}</p>
                     <div className="mb-3">
@@ -338,7 +348,11 @@ export function AppointmentDetailPage() {
                       <Button variant="secondary" onClick={() => setCancelOpen(false)}>
                         {t("common.back")}
                       </Button>
-                      <Button variant="danger" loading={cancelMutation.isPending} onClick={handleCancel}>
+                      <Button
+                        variant="danger"
+                        loading={isPatient ? myCancelMutation.isPending : cancelMutation.isPending}
+                        onClick={handleCancel}
+                      >
                         {t("appointment.cancel")}
                       </Button>
                     </div>

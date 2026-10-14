@@ -1,7 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   bookAppointment,
+  bookMyAppointment,
   cancelAppointment,
+  cancelMyAppointment,
   completeAppointment,
   confirmAppointment,
   getAppointment,
@@ -14,6 +16,7 @@ import {
   type AppointmentSummary,
   type AppointmentSummaryPagedResult,
   type BookAppointmentRequest,
+  type BookMyAppointmentRequest,
   type CancelAppointmentRequest,
   type RescheduleAppointmentRequest,
 } from "../../lib/api/appointments";
@@ -26,11 +29,15 @@ export function useAppointmentsSearch(params: AppointmentSearchParams) {
   });
 }
 
-export function useOwnAppointments(params: { page?: number; pageSize?: number }) {
+export function useOwnAppointments(
+  params: { page?: number; pageSize?: number },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["appointments", "me", params],
     queryFn: () => getOwnAppointments(params),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
@@ -58,6 +65,16 @@ export function useBookAppointment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: BookAppointmentRequest) => bookAppointment(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
+}
+
+export function useBookMyAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BookMyAppointmentRequest) => bookMyAppointment(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["appointments"] });
     },
@@ -92,6 +109,17 @@ export function useCancelAppointment() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body?: CancelAppointmentRequest }) =>
       cancelAppointment(id, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
+}
+
+export function useCancelMyAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body?: CancelAppointmentRequest }) =>
+      cancelMyAppointment(id, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["appointments"] });
     },

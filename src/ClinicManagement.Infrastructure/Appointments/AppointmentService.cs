@@ -20,6 +20,7 @@ public sealed class AppointmentService(
     IAuditService auditService,
     TimeProvider timeProvider,
     IValidator<BookAppointmentRequest> bookValidator,
+    IValidator<BookMyAppointmentRequest> bookMyValidator,
     IValidator<RescheduleAppointmentRequest> rescheduleValidator,
     IValidator<CancelAppointmentRequest> cancelValidator,
     IValidator<AppointmentSearchQuery> searchValidator,
@@ -94,13 +95,6 @@ public sealed class AppointmentService(
         Guid appointmentId,
         CancellationToken cancellationToken)
     {
-        if (currentUser.IsInRole(RoleNames.Patient))
-        {
-            return Failure<AppointmentDetails>(
-                ErrorCodes.Forbidden,
-                "Patients may only view their own appointments.");
-        }
-
         var appointment = await dbContext.Appointments
             .AsNoTracking()
             .Include(candidate => candidate.Patient)
@@ -109,6 +103,17 @@ public sealed class AppointmentService(
         if (appointment is null)
         {
             return Failure<AppointmentDetails>(ErrorCodes.NotFound, "Appointment was not found.");
+        }
+
+        if (currentUser.IsInRole(RoleNames.Patient))
+        {
+            var ownPatientId = await ResolveOwnPatientIdAsync(cancellationToken);
+            if (ownPatientId == Guid.Empty || appointment.PatientId != ownPatientId)
+            {
+                return Failure<AppointmentDetails>(
+                    ErrorCodes.Forbidden,
+                    "Patients may only view their own appointments.");
+            }
         }
 
         await auditService.RecordAsync(
@@ -160,6 +165,87 @@ public sealed class AppointmentService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var appointment = Appointment.Book(
             request.PatientId,
+            request.DoctorId,
+            startsAtUtc,
+            endsAtUtc,
+            request.ReasonForVisit,
+            bookedByUserId,
+            now);
+
+        dbContext.Appointments.Add(appointment);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            return Failure<AppointmentDetails>(
+                ErrorCodes.AppointmentSlotTaken,
+                "That slot was just taken for this doctor. Pick another time.");
+        }
+
+        await auditService.RecordAsync(
+            AuditAction.Created,
+            nameof(Appointment),
+            appointment.Id.ToString(),
+            appointment.PatientId,
+            cancellationToken: cancellationToken);
+
+        var created = await dbContext.Appointments
+            .Include(candidate => candidate.Patient)
+            .SingleAsync(candidate => candidate.Id == appointment.Id, cancellationToken);
+
+        return Result<AppointmentDetails>.Success((await MapSummariesAsync([created], cancellationToken))[0]);
+    }
+
+    public async Task<Result<AppointmentDetails>> BookMyAppointmentAsync(
+        BookMyAppointmentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await bookMyValidator.ValidateAndBindAsync(request, cancellationToken);
+        if (validation.Failed)
+        {
+            return Failure<AppointmentDetails>(validation.Error!);
+        }
+
+        if (!currentUser.IsInRole(RoleNames.Patient))
+        {
+            return Failure<AppointmentDetails>(ErrorCodes.Forbidden, "This endpoint is for patients only.");
+        }
+
+        var patientId = await ResolveOwnPatientIdAsync(cancellationToken);
+        if (patientId == Guid.Empty)
+        {
+            return Failure<AppointmentDetails>(
+                ErrorCodes.NotFound,
+                "No patient record is linked to this account.");
+        }
+
+        if (currentUser.UserId is not { } bookedByUserId)
+        {
+            return Failure<AppointmentDetails>(ErrorCodes.Forbidden, "No signed-in user was found.");
+        }
+
+        var startsAtUtc = NormalizeUtc(request.StartsAtUtc);
+        var endsAtUtc = startsAtUtc.AddMinutes(request.DurationMinutes);
+
+        var slot = await ValidateSlotAsync(
+            request.DoctorId,
+            patientId,
+            startsAtUtc,
+            endsAtUtc,
+            excludedAppointmentId: null,
+            cancellationToken);
+
+        if (slot.Failed)
+        {
+            return Failure<AppointmentDetails>(slot.Error!);
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var appointment = Appointment.Book(
+            patientId,
             request.DoctorId,
             startsAtUtc,
             endsAtUtc,
@@ -340,6 +426,68 @@ public sealed class AppointmentService(
         return Result.Success();
     }
 
+    public async Task<Result> CancelOwnAppointmentAsync(
+        Guid appointmentId,
+        CancelAppointmentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await cancelValidator.ValidateAndBindAsync(request, cancellationToken);
+        if (validation.Failed)
+        {
+            return Result.Failure(validation.Error!);
+        }
+
+        if (!currentUser.IsInRole(RoleNames.Patient))
+        {
+            return Result.Failure(ErrorCodes.Forbidden, "This endpoint is for patients only.");
+        }
+
+        var patientId = await ResolveOwnPatientIdAsync(cancellationToken);
+        if (patientId == Guid.Empty)
+        {
+            return Result.Failure(ErrorCodes.NotFound, "No patient record is linked to this account.");
+        }
+
+        var appointment = await dbContext.Appointments
+            .FirstOrDefaultAsync(candidate => candidate.Id == appointmentId, cancellationToken);
+
+        if (appointment is null)
+        {
+            return Result.Failure(ErrorCodes.NotFound, "Appointment was not found.");
+        }
+
+        if (appointment.PatientId != patientId)
+        {
+            return Result.Failure(ErrorCodes.Forbidden, "You can only cancel your own appointments.");
+        }
+
+        try
+        {
+            appointment.Cancel(request.Reason, timeProvider.GetUtcNow().UtcDateTime);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DomainException exception)
+        {
+            return Result.Failure(exception.Code, exception.Message);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure(
+                ErrorCodes.ConcurrencyConflict,
+                "The appointment was modified by someone else. Reload it and try again.");
+        }
+
+        await auditService.RecordAsync(
+            AuditAction.Updated,
+            nameof(Appointment),
+            appointment.Id.ToString(),
+            appointment.PatientId,
+            [nameof(Appointment.Status), nameof(Appointment.CancellationReason)],
+            cancellationToken);
+
+        return Result.Success();
+    }
+
     public async Task<Result<PagedResult<AppointmentSummary>>> GetOwnAppointmentsAsync(
         PageRequest page,
         CancellationToken cancellationToken)
@@ -384,13 +532,6 @@ public sealed class AppointmentService(
         DateTime toUtc,
         CancellationToken cancellationToken)
     {
-        if (currentUser.IsInRole(RoleNames.Patient))
-        {
-            return Failure<IReadOnlyList<AvailabilitySlot>>(
-                ErrorCodes.Forbidden,
-                "Patients cannot inspect doctor availability.");
-        }
-
         var from = NormalizeUtc(fromUtc);
         var to = NormalizeUtc(toUtc);
 
@@ -464,25 +605,38 @@ public sealed class AppointmentService(
 
     public async Task<Result<IReadOnlyList<DoctorSummary>>> ListDoctorsAsync(CancellationToken cancellationToken)
     {
+        var query = dbContext.Doctors.AsNoTracking();
+
+        // Patients only ever see doctors who are open for booking; staff need the full roster to
+        // manage schedules and bookings for everyone.
         if (currentUser.IsInRole(RoleNames.Patient))
         {
-            return Failure<IReadOnlyList<DoctorSummary>>(
-                ErrorCodes.Forbidden,
-                "Patients cannot list doctors.");
+            query = query.Where(doctor => doctor.IsAcceptingAppointments);
         }
 
-        var doctors = await dbContext.Doctors
-            .AsNoTracking()
+        var doctors = await query
             .Join(
                 dbContext.Users,
                 doctor => doctor.ApplicationUserId,
                 user => user.Id,
-                (doctor, user) => new { doctor.Id, user.FullName, doctor.IsAcceptingAppointments })
+                (doctor, user) => new
+                {
+                    doctor.Id,
+                    user.FullName,
+                    doctor.Specialty,
+                    doctor.IsAcceptingAppointments
+                })
             .OrderBy(pair => pair.FullName)
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<DoctorSummary>>.Success(
-            doctors.Select(pair => new DoctorSummary(pair.Id, pair.FullName, pair.IsAcceptingAppointments)).ToArray());
+            doctors
+                .Select(pair => new DoctorSummary(
+                    pair.Id,
+                    pair.FullName,
+                    pair.Specialty,
+                    pair.IsAcceptingAppointments))
+                .ToArray());
     }
 
     public async Task<Result<IReadOnlyList<DoctorScheduleResponse>>> GetScheduleAsync(

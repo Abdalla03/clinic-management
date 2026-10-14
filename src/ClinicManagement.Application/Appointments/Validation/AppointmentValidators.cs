@@ -26,6 +26,25 @@ public sealed class BookAppointmentRequestValidator : AbstractValidator<BookAppo
     }
 }
 
+public sealed class BookMyAppointmentRequestValidator : AbstractValidator<BookMyAppointmentRequest>
+{
+    public BookMyAppointmentRequestValidator()
+    {
+        RuleFor(request => request.DoctorId).NotEmpty();
+        RuleFor(request => request.StartsAtUtc)
+            .NotEmpty()
+            .Must(startsAt => startsAt.Year > 2000)
+            .WithMessage("startsAtUtc must be an ISO-8601 timestamp.");
+        RuleFor(request => request.DurationMinutes)
+            .InclusiveBetween(
+                BookAppointmentRequestValidator.MinDurationMinutes,
+                BookAppointmentRequestValidator.MaxDurationMinutes);
+        RuleFor(request => request.ReasonForVisit)
+            .MaximumLength(512)
+            .When(request => request.ReasonForVisit is not null);
+    }
+}
+
 public sealed class RescheduleAppointmentRequestValidator : AbstractValidator<RescheduleAppointmentRequest>
 {
     public RescheduleAppointmentRequestValidator()

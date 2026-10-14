@@ -7,7 +7,8 @@ import { Field, Input, Select, Textarea } from "../../components/ui/Field";
 import { LoadingState } from "../../components/ui/Spinner";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { IconCalendar, IconUsers } from "../../components/icons";
-import { useBookAppointment } from "../../features/appointments/hooks";
+import { useBookAppointment, useBookMyAppointment } from "../../features/appointments/hooks";
+import { useAuth } from "../../features/auth/useAuth";
 import { useAvailability, useDoctors } from "../../features/doctors/hooks";
 import { usePatientsSearch } from "../../features/patients/hooks";
 import { useApiErrorMessage } from "../../features/errors/useApiErrorMessage";
@@ -25,6 +26,7 @@ export function AppointmentBookingPage() {
   const toast = useToast();
   const apiMessage = useApiErrorMessage();
   const navigate = useNavigate();
+  const { isPatient } = useAuth();
 
   const [patientQuery, setPatientQuery] = useState("");
   const [patientId, setPatientId] = useState("");
@@ -35,10 +37,13 @@ export function AppointmentBookingPage() {
   const [errors, setErrors] = useState<{ patient?: string; doctor?: string; date?: string; slot?: string }>({});
 
   const debouncedPatientQuery = useDebouncedValue(patientQuery);
-  const patientSearchQuery = usePatientsSearch({
-    query: debouncedPatientQuery.trim() || undefined,
-    pageSize: 8,
-  });
+  const patientSearchQuery = usePatientsSearch(
+    {
+      query: debouncedPatientQuery.trim() || undefined,
+      pageSize: 8,
+    },
+    !isPatient,
+  );
   const doctorsQuery = useDoctors();
 
   const range = useMemo(() => {
@@ -52,13 +57,24 @@ export function AppointmentBookingPage() {
 
   const availabilityQuery = useAvailability(doctorId || undefined, range);
   const bookMutation = useBookAppointment();
+  const bookMyMutation = useBookMyAppointment();
 
   const patients = patientSearchQuery.data?.items ?? [];
   const selectedPatient = patients.find((p) => p.id === patientId) ?? undefined;
 
+  const handleBooked = (appointment: { id?: string; patientName?: string | null }) => {
+    toast.success({ title: t("appointment.bookedSuccess", { patient: appointment.patientName ?? "" }) });
+    navigate(isPatient ? "/appointments/me" : `/appointments/${appointment.id}`, { replace: true });
+  };
+
+  const handleError = (error: unknown) => {
+    const message = apiMessage(error);
+    toast.error({ title: message.title, message: message.message });
+  };
+
   const handleSubmit = () => {
     const nextErrors: typeof errors = {};
-    if (!patientId) {
+    if (!isPatient && !patientId) {
       nextErrors.patient = t("appointment.choosePatientError");
     }
     if (!doctorId) {
@@ -74,6 +90,20 @@ export function AppointmentBookingPage() {
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
+
+    if (isPatient) {
+      bookMyMutation.mutate(
+        {
+          doctorId,
+          startsAtUtc: slot,
+          durationMinutes: DEFAULT_DURATION_MINUTES,
+          reasonForVisit: reason.trim() || undefined,
+        },
+        { onSuccess: handleBooked, onError: handleError },
+      );
+      return;
+    }
+
     bookMutation.mutate(
       {
         patientId,
@@ -82,16 +112,7 @@ export function AppointmentBookingPage() {
         durationMinutes: DEFAULT_DURATION_MINUTES,
         reasonForVisit: reason.trim() || undefined,
       },
-      {
-        onSuccess: (appointment) => {
-          toast.success({ title: t("appointment.bookedSuccess", { patient: appointment.patientName ?? "" }) });
-          navigate(`/appointments/${appointment.id}`, { replace: true });
-        },
-        onError: (error) => {
-          const message = apiMessage(error);
-          toast.error({ title: message.title, message: message.message });
-        },
-      },
+      { onSuccess: handleBooked, onError: handleError },
     );
   };
 
@@ -101,7 +122,7 @@ export function AppointmentBookingPage() {
         title={t("appointment.new")}
         subtitle={t("appointment.book")}
         actions={
-          <Link to="/appointments">
+          <Link to={isPatient ? "/appointments/me" : "/appointments"}>
             <Button variant="secondary">{t("common.back")}</Button>
           </Link>
         }
@@ -109,57 +130,59 @@ export function AppointmentBookingPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader title={t("appointment.selectPatient")} />
-            <CardBody className="flex flex-col gap-3">
-              <Field label={t("appointment.selectPatient")} htmlFor="patient-search">
-                <Input
-                  id="patient-search"
-                  type="search"
-                  value={patientQuery}
-                  onChange={(event) => {
-                    setPatientQuery(event.target.value);
-                    setPatientId("");
-                  }}
-                  placeholder={t("appointment.patientSearchHint")}
-                />
-              </Field>
+          {!isPatient ? (
+            <Card>
+              <CardHeader title={t("appointment.selectPatient")} />
+              <CardBody className="flex flex-col gap-3">
+                <Field label={t("appointment.selectPatient")} htmlFor="patient-search">
+                  <Input
+                    id="patient-search"
+                    type="search"
+                    value={patientQuery}
+                    onChange={(event) => {
+                      setPatientQuery(event.target.value);
+                      setPatientId("");
+                    }}
+                    placeholder={t("appointment.patientSearchHint")}
+                  />
+                </Field>
 
-              {patientSearchQuery.isError ? <p className="text-sm font-medium text-red-600">{t("common.error")}</p> : null}
+                {patientSearchQuery.isError ? <p className="text-sm font-medium text-red-600">{t("common.error")}</p> : null}
 
-              {!patientSearchQuery.isLoading && !patientSearchQuery.isError && patients.length === 0 ? (
-                <EmptyState icon={<IconUsers className="size-7 text-slate-300" />} title={t("appointment.patientNotFoundHint")} />
-              ) : null}
+                {!patientSearchQuery.isLoading && !patientSearchQuery.isError && patients.length === 0 ? (
+                  <EmptyState icon={<IconUsers className="size-7 text-slate-300" />} title={t("appointment.patientNotFoundHint")} />
+                ) : null}
 
-              {patients.length > 0 ? (
-                <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-                  {patients.map((patient) => {
-                    const selected = patient.id === patientId;
-                    return (
-                      <button
-                        key={patient.id}
-                        type="button"
-                        onClick={() => setPatientId(patient.id ?? "")}
-                        className={cn(
-                          "flex items-start justify-between gap-3 rounded-lg border p-3 text-start transition-colors",
-                          selected
-                            ? "border-primary-500 bg-primary-50"
-                            : "border-slate-200 bg-white hover:border-primary-300 hover:bg-slate-50",
-                        )}
-                      >
-                        <span className="text-sm font-medium text-slate-900">
-                          {patient.firstName} {patient.lastName}
-                        </span>
-                        <span className="font-mono text-xs text-slate-500">{patient.medicalRecordNumber}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+                {patients.length > 0 ? (
+                  <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
+                    {patients.map((patient) => {
+                      const selected = patient.id === patientId;
+                      return (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          onClick={() => setPatientId(patient.id ?? "")}
+                          className={cn(
+                            "flex items-start justify-between gap-3 rounded-lg border p-3 text-start transition-colors",
+                            selected
+                              ? "border-primary-500 bg-primary-50"
+                              : "border-slate-200 bg-white hover:border-primary-300 hover:bg-slate-50",
+                          )}
+                        >
+                          <span className="text-sm font-medium text-slate-900">
+                            {patient.firstName} {patient.lastName}
+                          </span>
+                          <span className="font-mono text-xs text-slate-500">{patient.medicalRecordNumber}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
-              {errors.patient ? <p className="text-xs font-medium text-red-600">{errors.patient}</p> : null}
-            </CardBody>
-          </Card>
+                {errors.patient ? <p className="text-xs font-medium text-red-600">{errors.patient}</p> : null}
+              </CardBody>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader title={t("appointment.selectDoctor")} />
@@ -262,10 +285,13 @@ export function AppointmentBookingPage() {
             ) : null}
 
             <div className="flex justify-end gap-2">
-              <Link to="/appointments">
+              <Link to={isPatient ? "/appointments/me" : "/appointments"}>
                 <Button variant="secondary">{t("common.cancel")}</Button>
               </Link>
-              <Button loading={bookMutation.isPending} onClick={handleSubmit}>
+              <Button
+                loading={bookMutation.isPending || bookMyMutation.isPending}
+                onClick={handleSubmit}
+              >
                 {t("appointment.book")}
               </Button>
             </div>

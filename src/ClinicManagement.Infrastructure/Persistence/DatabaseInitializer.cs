@@ -16,6 +16,7 @@ public static class DatabaseInitializer
     public static async Task InitializeAsync(
         IServiceProvider services,
         bool seedDemoAccounts,
+        bool seedDemoData = false,
         CancellationToken cancellationToken = default)
     {
         using var scope = services.CreateScope();
@@ -39,6 +40,11 @@ public static class DatabaseInitializer
         {
             var seeded = await provider.GetRequiredService<DemoAccountSeeder>().SeedAsync(cancellationToken);
             logger.LogInformation("Database migrated, roles ensured, {Seeded} demo accounts seeded.", seeded);
+
+            if (seedDemoData)
+            {
+                await provider.GetRequiredService<DemoDataSeeder>().SeedAsync(cancellationToken);
+            }
         }
         else
         {

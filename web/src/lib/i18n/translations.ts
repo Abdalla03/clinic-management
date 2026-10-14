@@ -42,6 +42,8 @@ export const translations = {
     "common.menu": "Menu",
     "common.signedInAs": "Signed in as {name}",
     "common.viewDetails": "View details",
+    "common.toggleTheme": "Toggle dark mode",
+    "brand.tagline": "Care, organized.",
 
     "role.doctor": "Doctor",
     "role.secretary": "Secretary",
@@ -80,6 +82,7 @@ export const translations = {
     "dashboard.sectionPatientsHint": "Search, create and edit patient records and medical history.",
     "dashboard.sectionSecurity": "Account security",
     "dashboard.sectionSecurityHint": "Manage two-factor authentication for this account.",
+    "dashboard.subtitle": "A live overview of {clinic}.",
 
     "auth.emailOrUserName": "Email or username",
     "auth.password": "Password",
@@ -432,6 +435,8 @@ export const translations = {
     "common.menu": "القائمة",
     "common.signedInAs": "مسجّل الدخول باسم {name}",
     "common.viewDetails": "عرض التفاصيل",
+    "common.toggleTheme": "تبديل الوضع الليلي",
+    "brand.tagline": "رعاية منظّمة.",
 
     "role.doctor": "طبيب",
     "role.secretary": "سكرتير",
@@ -470,6 +475,7 @@ export const translations = {
     "dashboard.sectionPatientsHint": "ابحث وأنشئ وعدّل سجلات المرضى وتاريخهم الطبي.",
     "dashboard.sectionSecurity": "أمان الحساب",
     "dashboard.sectionSecurityHint": "إدارة التحقق بخطوتين لهذا الحساب.",
+    "dashboard.subtitle": "نظرة حيّة على {clinic}.",
 
     "auth.emailOrUserName": "البريد الإلكتروني أو اسم المستخدم",
     "auth.password": "كلمة المرور",

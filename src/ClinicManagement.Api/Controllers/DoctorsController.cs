@@ -10,7 +10,7 @@ namespace ClinicManagement.Api.Controllers;
 public sealed class DoctorsController(IAppointmentService appointmentService) : ClinicControllerBase
 {
     [HttpGet("~/api/doctors")]
-    [Authorize(Policy = Policies.ClinicalStaff)]
+    [Authorize(Policy = Policies.AuthenticatedUser)]
     [ProducesResponseType(typeof(IReadOnlyList<DoctorSummary>), StatusCodes.Status200OK)]
     public async Task<IResult> ListAsync(CancellationToken cancellationToken)
     {
@@ -19,7 +19,7 @@ public sealed class DoctorsController(IAppointmentService appointmentService) : 
     }
 
     [HttpGet("availability")]
-    [Authorize(Policy = Policies.ClinicalStaff)]
+    [Authorize(Policy = Policies.AuthenticatedUser)]
     [ProducesResponseType(typeof(IReadOnlyList<AvailabilitySlot>), StatusCodes.Status200OK)]
     public async Task<IResult> GetAvailabilityAsync(
         Guid doctorId,

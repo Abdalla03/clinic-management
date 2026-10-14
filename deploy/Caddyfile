@@ -1,0 +1,28 @@
+# Caddy reverse proxy for the production stack.
+# Terminates TLS (Let's Encrypt automatically for a public DOMAIN) and forwards
+# /api and /health to the API while serving the SPA from nginx. Caddy injects
+# X-Forwarded-Proto, which the API trusts (ForwardedHeaders) so HSTS/redirect work.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	# API and health probes share the public origin.
+	reverse_proxy /api/* api:8080
+	reverse_proxy /health/* api:8080
+
+	# Everything else is the single-page app.
+	reverse_proxy web:80
+}

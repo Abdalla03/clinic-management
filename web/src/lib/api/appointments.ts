@@ -6,6 +6,7 @@ export type AppointmentDetails = components["schemas"]["AppointmentDetails"];
 export type AppointmentSummaryPagedResult = components["schemas"]["AppointmentSummaryPagedResult"];
 export type AppointmentStatus = components["schemas"]["AppointmentStatus"];
 export type BookAppointmentRequest = components["schemas"]["BookAppointmentRequest"];
+export type BookMyAppointmentRequest = components["schemas"]["BookMyAppointmentRequest"];
 export type RescheduleAppointmentRequest = components["schemas"]["RescheduleAppointmentRequest"];
 export type CancelAppointmentRequest = components["schemas"]["CancelAppointmentRequest"];
 
@@ -39,6 +40,11 @@ export function bookAppointment(body: BookAppointmentRequest): Promise<Appointme
   return api.POST("/api/appointments", { body }).then(unwrap);
 }
 
+/** Books an appointment for the signed-in patient's own record. */
+export function bookMyAppointment(body: BookMyAppointmentRequest): Promise<AppointmentDetails> {
+  return api.POST("/api/appointments/me", { body }).then(unwrap);
+}
+
 export function rescheduleAppointment(
   id: string,
   body: RescheduleAppointmentRequest,
@@ -69,5 +75,18 @@ export function markAppointmentNoShow(id: string): Promise<AppointmentDetails> {
 export function cancelAppointment(id: string, body: CancelAppointmentRequest = {}): Promise<AppointmentDetails> {
   return api
     .POST("/api/appointments/{appointmentId}/cancel", { params: { path: { appointmentId: id } }, body })
+    .then(unwrap);
+}
+
+/** Cancels one of the signed-in patient's own appointments. */
+export function cancelMyAppointment(
+  id: string,
+  body: CancelAppointmentRequest = {},
+): Promise<AppointmentDetails> {
+  return api
+    .POST("/api/appointments/me/{appointmentId}/cancel", {
+      params: { path: { appointmentId: id } },
+      body,
+    })
     .then(unwrap);
 }

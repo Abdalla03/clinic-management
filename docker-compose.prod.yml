@@ -1,0 +1,58 @@
+# Production overlay for the Clinic Management stack.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+#
+# Requires, in .env (generate the two secrets with scripts/generate-secrets.ps1):
+#   DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, Jwt__SigningKey, Clinic__Encryption__MasterKeyBase64
+#
+# What this overlay changes vs. the dev compose:
+#   * API runs as Production -> HSTS + HTTPS redirect on, Swagger off, demo users NEVER seeded,
+#     and the process refuses to boot with missing/short JWT or encryption secrets.
+#   * Only Caddy is published to the host (80/443). The API, web and Postgres ports are bound
+#     to loopback only, so they are reachable from the host for operators/backups but never
+#     from the network.
+#   * CORS is restricted to the single public https origin.
+
+services:
+  db:
+    # Loopback only: never expose Postgres off-host. `!override` replaces the base
+    # host-port mapping instead of appending to it (which would bind the port twice).
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Cors__AllowedOrigins__0: https://${DOMAIN:?set DOMAIN in .env}
+    ports: !override
+      - "127.0.0.1:8080:8080"
+
+  web:
+    environment:
+      WEB_API_URL: https://${DOMAIN:?set DOMAIN in .env}
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-3000}:80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

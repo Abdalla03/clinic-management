@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/useAuth";
+import { clinicName } from "../lib/branding";
 import { cn } from "../lib/cn";
 import { useI18n } from "../lib/i18n/useI18n";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { ClinicalStaffRoles, RolePatient, type Role } from "../lib/roles";
+import { AmbientBackground } from "./AmbientBackground";
 import { LanguageToggle } from "./LanguageToggle";
+import { ThemeToggle } from "./ThemeToggle";
 import {
   IconCalendar,
   IconChart,
@@ -151,7 +154,8 @@ export function AppShell() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="relative min-h-screen">
+      <AmbientBackground variant="app" />
       {open ? (
         <button
           type="button"
@@ -172,8 +176,8 @@ export function AppShell() {
             <IconHeart className="size-5" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{t("common.appName")}</p>
-            <p className="text-xs text-slate-400">v1</p>
+            <p className="truncate text-sm font-bold text-white">{clinicName}</p>
+            <p className="text-xs text-slate-400">{t("brand.tagline")}</p>
           </div>
         </div>
 
@@ -215,11 +219,11 @@ export function AppShell() {
       </aside>
 
       <div className="lg:ps-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur lg:px-8">
+        <header className="glass sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 px-4 lg:px-8 dark:border-slate-800">
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
             aria-label={t("common.menu")}
           >
             <IconMenu />
@@ -228,6 +232,7 @@ export function AppShell() {
           <div className="flex-1" />
 
           <LanguageToggle />
+          <ThemeToggle />
 
           <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white py-1 ps-1 pe-3 shadow-sm">
             <span className="flex size-8 items-center justify-center rounded-md bg-primary-100 text-xs font-bold text-primary-700">
@@ -240,7 +245,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 motion-safe:animate-fade-up lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>

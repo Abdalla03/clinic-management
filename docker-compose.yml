@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clinic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-clinic}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - clinic-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      Database__Provider: PostgreSQL
+      Database__Host: db
+      Database__Port: 5432
+      Database__Name: ${POSTGRES_DB:-clinic}
+      Database__User: ${POSTGRES_USER:-clinic}
+      Database__Password: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      Jwt__Issuer: ${Jwt__Issuer:-clinic-api}
+      Jwt__Audience: ${Jwt__Audience:-clinic-web}
+      Jwt__SigningKey: ${Jwt__SigningKey:?generate one with openssl rand -base64 48}
+      Clinic__Encryption__MasterKeyBase64: ${Clinic__Encryption__MasterKeyBase64:?generate one with openssl rand -base64 32}
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0:-http://localhost:3000}
+      Serilog__MinimumLevel: ${Serilog__MinimumLevel:-Information}
+    ports:
+      - "8080:8080"
+    command: ["--migrate"]
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${WEB_API_URL:-http://localhost:8080}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      WEB_API_URL: ${WEB_API_URL:-http://localhost:8080}
+    ports:
+      - "${WEB_PORT:-3000}:80"
+
+volumes:
+  clinic-postgres-data:

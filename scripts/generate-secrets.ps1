@@ -80,6 +80,8 @@ Get-Content -LiteralPath $EnvFile | ForEach-Object { $lines.Add($_) }
 
 Write-Host 'Generating secrets:'
 $onlyIfEmpty = -not $Force
+$pgPassword = -join ((New-Base64Secret 24).ToCharArray() | Where-Object { $_ -match '[A-Za-z0-9]' })
+Set-EnvValue -Lines $lines -Key 'POSTGRES_PASSWORD' -Value $pgPassword -OnlyIfEmpty $onlyIfEmpty
 Set-EnvValue -Lines $lines -Key 'Jwt__SigningKey' -Value (New-Base64Secret 48) -OnlyIfEmpty $onlyIfEmpty
 Set-EnvValue -Lines $lines -Key 'Clinic__Encryption__MasterKeyBase64' -Value (New-Base64Secret 32) -OnlyIfEmpty $onlyIfEmpty
 

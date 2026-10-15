@@ -16,11 +16,21 @@ import { useToast } from "../lib/toast/useToast";
 import { useApiErrorMessage } from "../features/errors/useApiErrorMessage";
 import { useAuth } from "../features/auth/useAuth";
 
+// Demo accounts exist only in Development seed data. The panel is hidden unless the runtime flag
+// WEB_SHOW_DEMO_LOGINS=true (written to config.js by the container) or the Vite dev server is used.
+// Passwords are intentionally not shipped in the bundle; they live in the project README.
 const demoAccounts = [
-  { email: "doctor@clinic.local", password: "Doctor!Clinic2026", roleKey: "role.doctor" },
-  { email: "secretary@clinic.local", password: "Secretary!Clinic2026", roleKey: "role.secretary" },
-  { email: "patient@clinic.local", password: "Patient!Clinic2026", roleKey: "role.patient" },
+  { email: "doctor@clinic.local", roleKey: "role.doctor" },
+  { email: "secretary@clinic.local", roleKey: "role.secretary" },
+  { email: "patient@clinic.local", roleKey: "role.patient" },
 ] as const;
+
+const showDemoLogins =
+  import.meta.env.DEV ||
+  (typeof window !== "undefined" &&
+    (window as Window & { __CLINIC_SHOW_DEMO__?: string }).__CLINIC_SHOW_DEMO__ === "true");
+
+const currentYear = new Date().getFullYear();
 
 const featuredKeys: TranslationKey[] = ["patient.title", "appointment.title", "invoice.title"];
 
@@ -110,7 +120,7 @@ export function LoginPage() {
         </div>
 
         <p className="relative text-xs text-slate-400">
-          © {new Date().getFullYear()} {clinicName}
+          © {currentYear} {clinicName}
         </p>
       </section>
 
@@ -186,6 +196,7 @@ export function LoginPage() {
                 </Button>
               </form>
 
+              {showDemoLogins ? (
               <details className="mt-5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60">
                 <summary className="cursor-pointer font-medium text-slate-600 dark:text-slate-300">
                   Demo sign-ins
@@ -200,6 +211,7 @@ export function LoginPage() {
                 </ul>
                 <p className="mt-2">Passwords are in the project README.</p>
               </details>
+              ) : null}
             </div>
           </div>
         </div>

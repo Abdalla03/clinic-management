@@ -19,6 +19,10 @@
 		-Server
 	}
 
+	# The SPA gets a strict CSP (fonts and scripts are self-hosted; the API shares the origin).
+	@spa not path /api/* /health/*
+	header @spa Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
 	# API and health probes share the public origin.
 	reverse_proxy /api/* api:8080
 	reverse_proxy /health/* api:8080
